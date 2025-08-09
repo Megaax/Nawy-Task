@@ -90,7 +90,7 @@ resource "aws_ecs_task_definition" "this" {
   container_definitions = jsonencode([
     {
       name      = "app",
-      image     = var.image,                # e.g. ghcr.io/you/node-hello:latest
+      image     = var.image,
       essential = true,
       portMappings = [
         {
