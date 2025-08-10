@@ -56,6 +56,30 @@ resource "aws_iam_role_policy_attachment" "task_exec_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+# --- Task role (read NR license from Secrets Manager) ---
+resource "aws_iam_role" "task_role" {
+  name               = "${var.name}-task-role"
+  assume_role_policy = data.aws_iam_policy_document.ecs_task_assume.json
+}
+
+data "aws_iam_policy_document" "task_secrets_policy" {
+  statement {
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = [aws_secretsmanager_secret.newrelic_license.arn]
+  }
+}
+
+resource "aws_iam_policy" "task_secrets" {
+  name   = "${var.name}-task-secrets"
+  policy = data.aws_iam_policy_document.task_secrets_policy.json
+}
+
+resource "aws_iam_role_policy_attachment" "task_secrets_attach" {
+  role       = aws_iam_role.task_role.name
+  policy_arn = aws_iam_policy.task_secrets.arn
+}
+
+
 # --- Security group (open container port to the world) ---
 resource "aws_security_group" "svc" {
   name        = "${var.name}-sg"
@@ -78,7 +102,42 @@ resource "aws_security_group" "svc" {
   }
 }
 
-# --- Task definition ---
+# # --- Task definition ---
+# resource "aws_ecs_task_definition" "this" {
+#   family                   = "${var.name}-task"
+#   requires_compatibilities = ["FARGATE"]
+#   network_mode             = "awsvpc"
+#   cpu                      = var.task_cpu
+#   memory                   = var.task_memory
+#   execution_role_arn       = aws_iam_role.task_exec.arn
+
+#   container_definitions = jsonencode([
+#     {
+#       name      = "app",
+#       image     = var.image,
+#       essential = true,
+#       portMappings = [
+#         {
+#           containerPort = var.container_port,
+#           protocol      = "tcp"
+#         }
+#       ],
+#       environment = [
+#         { name = "PORT", value = tostring(var.container_port) }
+#       ],
+#       logConfiguration = {
+#         logDriver = "awslogs",
+#         options = {
+#           awslogs-region        = var.region,
+#           awslogs-group         = aws_cloudwatch_log_group.ecs.name,
+#           awslogs-stream-prefix = "ecs"
+#         }
+#       }
+#     }
+#   ])
+# }
+
+# --- Task definition (with FireLens -> New Relic) ---
 resource "aws_ecs_task_definition" "this" {
   family                   = "${var.name}-task"
   requires_compatibilities = ["FARGATE"]
@@ -86,28 +145,55 @@ resource "aws_ecs_task_definition" "this" {
   cpu                      = var.task_cpu
   memory                   = var.task_memory
   execution_role_arn       = aws_iam_role.task_exec.arn
+  task_role_arn            = aws_iam_role.task_role.arn
 
   container_definitions = jsonencode([
+    # FireLens log router (Fluent Bit)
     {
-      name      = "app",
-      image     = var.image,
-      essential = true,
-      portMappings = [
-        {
-          containerPort = var.container_port,
-          protocol      = "tcp"
+      "name": "log_router",
+      "image": "public.ecr.aws/aws-observability/aws-for-fluent-bit:latest",
+      "essential": true,
+      "firelensConfiguration": {
+        "type": "fluentbit",
+        "options": { "enable-ecs-log-metadata": "true" }
+      },
+      # Router's own logs go to CloudWatch for troubleshooting
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-region": var.region,
+          "awslogs-group": aws_cloudwatch_log_group.ecs.name,
+          "awslogs-stream-prefix": "firelens"
         }
+      }
+    },
+
+    # Your application container
+    {
+      "name": "app",
+      "image": var.image,
+      "essential": true,
+      "portMappings": [
+        { "containerPort": var.container_port, "protocol": "tcp" }
       ],
-      environment = [
-        { name = "PORT", value = tostring(var.container_port) }
+      "environment": [
+        { "name": "PORT", "value": tostring(var.container_port) }
       ],
-      logConfiguration = {
-        logDriver = "awslogs",
-        options = {
-          awslogs-region        = var.region,
-          awslogs-group         = aws_cloudwatch_log_group.ecs.name,
-          awslogs-stream-prefix = "ecs"
-        }
+      # Send app logs to New Relic via FireLens
+      "logConfiguration": {
+        "logDriver": "awsfirelens",
+        "options": {
+          "Name": "newrelic",
+          "endpoint": local.newrelic_endpoint,
+          "compress": "gzip",
+          "Retry_Limit": "2"
+        },
+        "secretOptions": [
+          {
+            "name": "licenseKey",
+            "valueFrom": aws_secretsmanager_secret.newrelic_license.arn
+          }
+        ]
       }
     }
   ])
@@ -129,4 +215,17 @@ resource "aws_ecs_service" "this" {
 
   deployment_minimum_healthy_percent = 0
   deployment_maximum_percent         = 100
+}
+
+locals {
+  newrelic_endpoint = upper(var.newrelic_region) == "EU" ? "https://log-api.eu.newrelic.com/log/v1" : "https://log-api.newrelic.com/log/v1"
+}
+
+resource "aws_secretsmanager_secret" "newrelic_license" {
+  name = "${var.name}-newrelic-license"
+}
+
+resource "aws_secretsmanager_secret_version" "newrelic_license" {
+  secret_id     = aws_secretsmanager_secret.newrelic_license.id
+  secret_string = var.newrelic_license_key
 }

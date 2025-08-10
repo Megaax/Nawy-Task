@@ -198,6 +198,7 @@ jobs:
     if: ${{ github.event_name != 'pull_request' }}  # don't apply infra on PRs
     env:
       AWS_REGION: ${{ secrets.AWS_REGION || 'eu-central-1' }}
+      TF_VAR_newrelic_license_key: ${{ secrets.NEW_RELIC_LICENSE_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -233,6 +234,6 @@ jobs:
         working-directory: terraform
         run: terraform apply -auto-approve tfplan
 
-      - name: Terraform Destroy (cleanup)
-        working-directory: terraform
-        run: terraform destroy -auto-approve
+      # - name: Terraform Destroy (cleanup)
+      #   working-directory: terraform
+      #   run: terraform destroy -auto-approve

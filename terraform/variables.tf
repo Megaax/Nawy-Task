@@ -39,3 +39,21 @@ variable "desired_count" {
   type        = number
   default     = 1
 }
+
+# Which New Relic logs endpoint to use (US or EU)
+variable "newrelic_region" {
+  description = "New Relic region for logs endpoint (US or EU)"
+  type        = string
+  default     = "US"
+  validation {
+    condition     = contains(["US", "EU"], upper(var.newrelic_region))
+    error_message = "newrelic_region must be US or EU."
+  }
+}
+
+# The New Relic LICENSE key
+variable "newrelic_license_key" {
+  description = "New Relic ingest license key"
+  type        = string
+  sensitive   = true
+}
