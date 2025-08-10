@@ -170,7 +170,7 @@ resource "aws_ecs_task_definition" "this" {
     # FireLens log router (Fluent Bit)
     {
       name      = "log_router"
-      image     = "newrelic/fluently-bit:latest"
+      image     = "newrelic/newrelic-fluentbit-output:latest"
       essential = true
       firelensConfiguration = {
         type    = "fluentbit"
@@ -239,7 +239,7 @@ locals {
 }
 
 resource "aws_secretsmanager_secret" "newrelic_license" {
-  name = "${var.name}-newrelic-license-7"
+  name = "${var.name}-newrelic-license-8"
 }
 
 resource "aws_secretsmanager_secret_version" "newrelic_license" {
