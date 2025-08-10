@@ -62,6 +62,25 @@ resource "aws_iam_role" "task_role" {
   assume_role_policy = data.aws_iam_policy_document.ecs_task_assume.json
 }
 
+# Allow the EXECUTION role to read the New Relic license secret
+data "aws_iam_policy_document" "exec_secrets_policy" {
+  statement {
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = [aws_secretsmanager_secret.newrelic_license.arn]
+  }
+}
+
+resource "aws_iam_policy" "exec_secrets" {
+  name   = "${var.name}-exec-secrets"
+  policy = data.aws_iam_policy_document.exec_secrets_policy.json
+}
+
+resource "aws_iam_role_policy_attachment" "exec_secrets_attach" {
+  role       = aws_iam_role.task_exec.name
+  policy_arn = aws_iam_policy.exec_secrets.arn
+}
+
+
 data "aws_iam_policy_document" "task_secrets_policy" {
   statement {
     actions   = ["secretsmanager:GetSecretValue"]
@@ -220,7 +239,7 @@ locals {
 }
 
 resource "aws_secretsmanager_secret" "newrelic_license" {
-  name = "${var.name}-newrelic-license-5"
+  name = "${var.name}-newrelic-license-6"
 }
 
 resource "aws_secretsmanager_secret_version" "newrelic_license" {
