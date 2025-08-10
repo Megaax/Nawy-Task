@@ -199,6 +199,7 @@ jobs:
     env:
       AWS_REGION: ${{ secrets.AWS_REGION || 'eu-central-1' }}
       TF_VAR_newrelic_license_key: ${{ secrets.NEW_RELIC_LICENSE_KEY }}
+      TF_VAR_newrelic_region: EU
     steps:
       - name: Checkout
         uses: actions/checkout@v4
