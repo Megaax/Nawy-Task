@@ -1,10 +1,10 @@
-# CI/CD + Terraform + ECS Fargate (No ALB) with New Relic Logs
+# CI/CD + Terraform + ECS Fargate with New Relic Logs
 
 This repo ships a minimal pipeline that:
 
 * Lints the Node app and scans for leaked secrets (Gitleaks)
-* Builds a Docker image and pushes to **GHCR** (and optionally Docker Hub)
-* Applies **Terraform** to deploy on **AWS ECS Fargate** (public IP, no ALB)
+* Builds a Docker image and pushes to **Docker Hub** 
+* Applies **Terraform** to deploy on **AWS ECS Fargate**
 * Routes container logs to **New Relic** via **FireLens (Fluent Bit)**
 
 ---
@@ -14,7 +14,7 @@ This repo ships a minimal pipeline that:
 * **GitHub Actions** workflow: `.github/workflows/ci-cd.yml`
 
   * Jobs: `lint` → `build-and-push` → `terraform-apply`
-  * Gitleaks secret scan, npm lint, Docker Buildx, push to GHCR/DockerHub, Terraform init/plan/apply
+  * Gitleaks secret scan, npm lint, Docker Buildx, push to DockerHub, Terraform init/plan/apply
 * **Terraform**: `terraform/main.tf` (+ your `variables.tf`)
 
   * ECS cluster, task definition (with FireLens → New Relic), service (public IP), SG, IAM roles, CW log group
@@ -28,9 +28,7 @@ This repo ships a minimal pipeline that:
 2. **New Relic account** (EU region in this setup) with an **Ingest License Key**.
 
    * New Relic → **Account settings → API keys → “Ingest – License”**
-3. **GitHub Container Registry** (GHCR) access (enabled by default in GitHub)
-
-   * Optional: Docker Hub account & token
+3. **Docker Hub Container Registry** (Docker Hub) access 
 
 ---
 
@@ -44,8 +42,8 @@ Add these in **Settings → Secrets and variables → Actions**:
 | `AWS_SECRET_ACCESS_KEY` | Terraform & AWS actions auth                              |
 | `AWS_REGION`            | (Optional) Defaults to `eu-central-1` in the workflow env |
 | `NEW_RELIC_LICENSE_KEY` | New Relic ingest license key used by FireLens             |
-| `DOCKERHUB_USERNAME`    | (Optional) If you also push to Docker Hub                 |
-| `DOCKERHUB_TOKEN`       | (Optional) Docker Hub access token                        |
+| `DOCKERHUB_USERNAME`    | If you also push to Docker Hub                 |
+| `DOCKERHUB_TOKEN`       | Docker Hub access token                        |
 
 > The workflow also sets `TF_VAR_newrelic_license_key` and `TF_VAR_newrelic_region=EU` so Terraform knows how/where to send logs.
 
@@ -61,14 +59,13 @@ Add these in **Settings → Secrets and variables → Actions**:
 2. **Build & Push Image**
 
    * Build with Buildx
-   * Push to **GHCR**: `ghcr.io/<owner>/node-hello:<tag>`
-   * Optional push to **Docker Hub** if secrets provided
+   * Push to **Docker Hub**: `DockerUsername/node-hello:<tag>`
 
 3. **Deploy with Terraform**
 
    * Creates ECS cluster + service (Fargate) + task definition
    * Security Group opens container port `3000` to the world
-   * **No ALB**: the task gets a **public IP** you can open in a browser
+   * **public IP** you can open in a browser
    * FireLens sidecar (`newrelic/newrelic-fluentbit-output:latest`) sends logs to **New Relic Logs EU** via your license key
 
 ---
@@ -140,7 +137,7 @@ Add these in **Settings → Secrets and variables → Actions**:
 
 Make sure your app listens on **`PORT=3000`** (or update `container_port`).
 
-### 2) Add GitHub secrets (above)
+### 2) Add Docker Hub secrets
 
 ### 3) Push to `main`
 
@@ -195,56 +192,13 @@ terraform apply -auto-approve
   ```bash
   terraform destroy -auto-approve
   ```
-
-* **Via GitHub Actions:**
-  Add a temporary job with `workflow_dispatch` that runs:
-
-  ```yaml
-  - run: terraform -chdir=terraform init
-  - run: terraform -chdir=terraform destroy -auto-approve
-  ```
-
 If you don’t have the state anymore, use the AWS CLI cleanup script approach (delete service → task defs → cluster → SG → log group → IAM role → secret).
-
----
-
-## Troubleshooting
-
-### Tasks keep stopping immediately
-
-* Check stopped reason:
-
-  ```bash
-  aws ecs describe-tasks --cluster <cluster> --tasks <task-arn> --query 'tasks[0].stoppedReason'
-  ```
-* Look at **CloudWatch Logs**: `/ecs/<name>`
-
-  * **firelens/** (router container)
-  * **ecs/app/** (your app)
-* Common causes:
-
-  * Wrong secret ARN or missing permission (`secretsmanager:GetSecretValue`) **on the execution role**
-  * Wrong New Relic endpoint (EU vs US) → set `TF_VAR_newrelic_region=EU`
-  * Bad Docker image name or private image without auth
-
-### Logs not appearing in New Relic
-
-* Confirm license key type = **Ingest License Key** (not a User/API key).
-* Confirm **EU** endpoint used if your account is EU.
-* FireLens logs should show successful POSTs (HTTP **202**).
-* If plugin error: ensure `log_router` image is `newrelic/newrelic-fluentbit-output:latest`.
-  (Alternative: use `aws-for-fluent-bit` with the `http` output and headers—ask if you want that variant.)
-
-### Rate limits / Docker Hub pulls
-
-* If Docker Hub throttles, mirror `newrelic/newrelic-fluentbit-output` to your **ECR** and use that image in the task def.
 
 ---
 
 ## Notes & Best Practices
 
-* **State backend**: For team environments, configure Terraform S3 backend + DynamoDB locking.
-* **Security**: No long-lived AWS keys—prefer GitHub OIDC to assume a role in AWS.
+* **State backend**: For team environments, we need to configure Terraform S3 backend + DynamoDB locking.
 * **Zero-downtime**: Without ALB there’s no load balancing or stable DNS. For production: ALB/NLB + Route 53 + HTTPS.
 * **Cost**: Fargate + public IP (no ALB) is cheap for demos; ALB adds cost.
 * **Tagging/metadata**: Consider adding environment/service labels to logs for better queries in New Relic.
@@ -255,10 +209,6 @@ If you don’t have the state anymore, use the AWS CLI cleanup script approach (
 
 * **Workflow**: `.github/workflows/ci-cd.yml`
 * **Terraform**: `terraform/main.tf`, `terraform/variables.tf`
-* **Image**: `ghcr.io/<owner>/node-hello:<tag>` (and optionally `<dockerhub-user>/node-hello:<tag>`)
+* **Image**: `<dockerhub-user>/node-hello:<tag>`
 * **App URL**: `http://<task-public-ip>:3000`
 * **Logs**: New Relic (EU) → Logs (search by recent messages or container name)
-
----
-
-Need a variant with **ALB + HTTPS**, **S3/Dynamo remote state**, or **OIDC** (no AWS keys in secrets)? Say the word and I’ll tailor it.
