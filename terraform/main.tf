@@ -150,53 +150,51 @@ resource "aws_ecs_task_definition" "this" {
   container_definitions = jsonencode([
     # FireLens log router (Fluent Bit)
     {
-      "name": "log_router",
-      "image": "public.ecr.aws/aws-observability/aws-for-fluent-bit:latest",
-      "essential": true,
-      "firelensConfiguration": {
-        "type": "fluentbit",
-        "options": { "enable-ecs-log-metadata": "true" }
-      },
+      name      = "log_router"
+      image     = "public.ecr.aws/aws-observability/aws-for-fluent-bit:latest"
+      essential = true
+      firelensConfiguration = {
+        type    = "fluentbit"
+        options = { enable-ecs-log-metadata = "true" }
+      }
       # Router's own logs go to CloudWatch for troubleshooting
-      "logConfiguration": {
-        "logDriver": "awslogs",
-        "options": {
-          "awslogs-region": var.region,
-          "awslogs-group": aws_cloudwatch_log_group.ecs.name,
-          "awslogs-stream-prefix": "firelens"
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-region        = var.region
+          awslogs-group         = aws_cloudwatch_log_group.ecs.name
+          awslogs-stream-prefix = "firelens"
         }
       }
     },
 
     # Your application container
     {
-      "name": "app",
-      "image": var.image,
-      "essential": true,
-      "portMappings": [
-        { "containerPort": var.container_port, "protocol": "tcp" }
-      ],
-      "environment": [
-        { "name": "PORT", "value": tostring(var.container_port) }
-      ],
+      name      = "app"
+      image     = var.image
+      essential = true
+      portMappings = [
+        { containerPort = var.container_port, protocol = "tcp" }
+      ]
+      environment = [
+        { name = "PORT", value = tostring(var.container_port) }
+      ]
       # Send app logs to New Relic via FireLens
-      "logConfiguration": {
-        "logDriver": "awsfirelens",
-        "options": {
-          "Name": "newrelic",
-          "endpoint": local.newrelic_endpoint,
-          "compress": "gzip",
-          "Retry_Limit": "2"
-        },
-        "secretOptions": [
-          {
-            "name": "licenseKey",
-            "valueFrom": aws_secretsmanager_secret.newrelic_license.arn
-          }
+      logConfiguration = {
+        logDriver = "awsfirelens"
+        options = {
+          Name        = "newrelic"
+          endpoint    = local.newrelic_endpoint
+          compress    = "gzip"
+          Retry_Limit = "2"
+        }
+        secretOptions = [
+          { name = "licenseKey", valueFrom = aws_secretsmanager_secret.newrelic_license.arn }
         ]
       }
     }
   ])
+
 }
 
 # --- Service with public IP (no ALB) ---
