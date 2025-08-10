@@ -15,7 +15,7 @@ This repo ships a minimal pipeline that:
 
   * Jobs: `lint` → `build-and-push` → `terraform-apply`
   * Gitleaks secret scan, npm lint, Docker Buildx, push to DockerHub, Terraform init/plan/apply
-* **Terraform**: `terraform/main.tf` (+ your `variables.tf`)
+* **Terraform**: `terraform/main.tf` + `variables.tf`
 
   * ECS cluster, task definition (with FireLens → New Relic), service (public IP), SG, IAM roles, CW log group
   * New Relic license key stored in **AWS Secrets Manager** and read by the task
@@ -70,66 +70,6 @@ Add these in **Settings → Secrets and variables → Actions**:
 
 ---
 
-## File snippets you provided (for reference)
-
-### `.github/workflows/ci-cd.yml` (excerpt)
-
-* Gitleaks, lint, build & push, Terraform apply
-* Sets:
-
-  ```yaml
-  env:
-    AWS_REGION: ${{ secrets.AWS_REGION || 'eu-central-1' }}
-    TF_VAR_newrelic_license_key: ${{ secrets.NEW_RELIC_LICENSE_KEY }}
-    TF_VAR_newrelic_region: EU
-  ```
-
-### `terraform/main.tf` (key parts)
-
-* FireLens container:
-
-  ```hcl
-  image = "newrelic/newrelic-fluentbit-output:latest"
-  ```
-* App logs to New Relic:
-
-  ```hcl
-  logConfiguration = {
-    logDriver = "awsfirelens"
-    options = {
-      Name        = "newrelic"
-      endpoint    = local.newrelic_endpoint   # EU/US picked by var
-      compress    = "gzip"
-      Retry_Limit = "2"
-    }
-    secretOptions = [
-      { name = "licenseKey", valueFrom = aws_secretsmanager_secret.newrelic_license.arn }
-    ]
-  }
-  ```
-* New Relic endpoint selector:
-
-  ```hcl
-  locals {
-    newrelic_endpoint = upper(var.newrelic_region) == "EU"
-      ? "https://log-api.eu.newrelic.com/log/v1"
-      : "https://log-api.newrelic.com/log/v1"
-  }
-  ```
-* Secret in Secrets Manager:
-
-  ```hcl
-  resource "aws_secretsmanager_secret" "newrelic_license" {
-    name = "${var.name}-newrelic-license-01"
-  }
-  resource "aws_secretsmanager_secret_version" "newrelic_license" {
-    secret_id     = aws_secretsmanager_secret.newrelic_license.id
-    secret_string = var.newrelic_license_key
-  }
-  ```
-* Permissions: both **execution role** and **task role** can read the secret (execution role is required for `secretOptions`).
-
----
 
 ## Setup & Run
 
@@ -150,13 +90,6 @@ Triggers the pipeline:
 Because there’s no ALB, open the task’s public IP directly:
 
 * AWS Console → **ECS → Clusters → `<name>-cluster` → Services → `<name>-svc` → Tasks → running task → “Public IP”**
-* Or CLI:
-
-  ```bash
-  aws ecs list-tasks --cluster Nawy-App-cluster --service-name Nawy-App-svc --query 'taskArns[0]' --output text \
-  | xargs -I {} aws ecs describe-tasks --cluster Nawy-App-cluster --tasks {} \
-    --query "tasks[0].attachments[0].details[?name=='publicIPv4Address'].value" --output text
-  ```
 
 Visit: `http://<PUBLIC_IP>:3000`
 
@@ -185,14 +118,11 @@ terraform apply -auto-approve
 
 ## Destroying the stack
 
-> **Important:** If you run `terraform destroy` from a different machine without the same state, Terraform won’t know what to delete. Use the same state backend you applied with (consider S3 + DynamoDB for remote state in production).
-
 * **Via CLI (from `terraform/` dir with the same state):**
 
   ```bash
   terraform destroy -auto-approve
   ```
-If you don’t have the state anymore, use the AWS CLI cleanup script approach (delete service → task defs → cluster → SG → log group → IAM role → secret).
 
 ---
 
