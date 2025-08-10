@@ -220,7 +220,7 @@ locals {
 }
 
 resource "aws_secretsmanager_secret" "newrelic_license" {
-  name = "${var.name}-newrelic-license-3"
+  name = "${var.name}-newrelic-license-5"
 }
 
 resource "aws_secretsmanager_secret_version" "newrelic_license" {
