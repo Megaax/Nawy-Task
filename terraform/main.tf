@@ -239,7 +239,7 @@ locals {
 }
 
 resource "aws_secretsmanager_secret" "newrelic_license" {
-  name = "${var.name}-newrelic-license-8"
+  name = "${var.name}-newrelic-license-9"
 }
 
 resource "aws_secretsmanager_secret_version" "newrelic_license" {
