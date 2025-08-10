@@ -120,42 +120,6 @@ resource "aws_security_group" "svc" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
-
-# # --- Task definition ---
-# resource "aws_ecs_task_definition" "this" {
-#   family                   = "${var.name}-task"
-#   requires_compatibilities = ["FARGATE"]
-#   network_mode             = "awsvpc"
-#   cpu                      = var.task_cpu
-#   memory                   = var.task_memory
-#   execution_role_arn       = aws_iam_role.task_exec.arn
-
-#   container_definitions = jsonencode([
-#     {
-#       name      = "app",
-#       image     = var.image,
-#       essential = true,
-#       portMappings = [
-#         {
-#           containerPort = var.container_port,
-#           protocol      = "tcp"
-#         }
-#       ],
-#       environment = [
-#         { name = "PORT", value = tostring(var.container_port) }
-#       ],
-#       logConfiguration = {
-#         logDriver = "awslogs",
-#         options = {
-#           awslogs-region        = var.region,
-#           awslogs-group         = aws_cloudwatch_log_group.ecs.name,
-#           awslogs-stream-prefix = "ecs"
-#         }
-#       }
-#     }
-#   ])
-# }
-
 # --- Task definition (with FireLens -> New Relic) ---
 resource "aws_ecs_task_definition" "this" {
   family                   = "${var.name}-task"
