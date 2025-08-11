@@ -25,9 +25,9 @@ This repo ships a minimal pipeline that:
 ## Prerequisites
 
 1. **AWS account & IAM user/role** with permissions for ECS, IAM, EC2 (SG), CloudWatch Logs, Secrets Manager.
-2. **New Relic account** (EU region in this setup) with an **Ingest License Key**.
+2. **New Relic account** **License Key**.
 
-   * New Relic → **Account settings → API keys → “Ingest – License”**
+   
 3. **Docker Hub Container Registry** (Docker Hub) access 
 
 ---
@@ -44,8 +44,9 @@ Add these in **Settings → Secrets and variables → Actions**:
 | `NEW_RELIC_LICENSE_KEY` | New Relic ingest license key used by FireLens             |
 | `DOCKERHUB_USERNAME`    | If you also push to Docker Hub                 |
 | `DOCKERHUB_TOKEN`       | Docker Hub access token                        |
+| `NEW_RELIC_LICENSE_KEY`       | New relic license key                        |
 
-> The workflow also sets `TF_VAR_newrelic_license_key` and `TF_VAR_newrelic_region=EU` so Terraform knows how/where to send logs.
+> The workflow also sets`TF_VAR_newrelic_region=EU` so Terraform knows how/where to send logs.
 
 ---
 
@@ -54,7 +55,7 @@ Add these in **Settings → Secrets and variables → Actions**:
 1. **Lint & Leaks**
 
    * `gitleaks` scans for hardcoded secrets
-   * `npm ci` + `npm run lint` (if you have a `lint` script)
+   * `npm ci` + `npm run lint` (if a `lint` script exists)
 
 2. **Build & Push Image**
 
@@ -66,7 +67,7 @@ Add these in **Settings → Secrets and variables → Actions**:
    * Creates ECS cluster + service (Fargate) + task definition
    * Security Group opens container port `3000` to the world
    * **public IP** you can open in a browser
-   * FireLens sidecar (`newrelic/newrelic-fluentbit-output:latest`) sends logs to **New Relic Logs EU** via your license key
+   * FireLens sidecar (`newrelic/newrelic-fluentbit-output:latest`) sends logs to **New Relic Logs EU**
 
 ---
 
@@ -77,7 +78,7 @@ Add these in **Settings → Secrets and variables → Actions**:
 
 Make sure your app listens on **`PORT=3000`** (or update `container_port`).
 
-### 2) Add Docker Hub secrets
+### 2) Add the previously mentioned secrets
 
 ### 3) Push to `main`
 
@@ -96,8 +97,6 @@ Visit: `http://<PUBLIC_IP>:3000`
 ### 5) See logs in New Relic
 
 * New Relic (EU) → **Logs**
-* Filter by the log group prefix or message text from your app.
-* If nothing appears, see **Troubleshooting** below.
 
 ---
 
@@ -109,7 +108,7 @@ If you want to try Terraform locally instead of GitHub Actions:
 cd terraform
 export AWS_REGION=eu-central-1
 export TF_VAR_newrelic_region=EU
-export TF_VAR_newrelic_license_key='<your NR license>'
+export TF_VAR_newrelic_license_key='<NR license>'
 terraform init
 terraform apply -auto-approve
 ```
